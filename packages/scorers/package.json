@@ -1,0 +1,38 @@
+{
+  "name": "@agentkit-eval/scorers",
+  "version": "0.0.1",
+  "description": "Built-in scorers for agentkit-eval. Trace-aware and output-aware.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./trace": {
+      "types": "./dist/trace.d.ts",
+      "import": "./dist/trace.js",
+      "require": "./dist/trace.cjs"
+    },
+    "./output": {
+      "types": "./dist/output.d.ts",
+      "import": "./dist/output.js",
+      "require": "./dist/output.cjs"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --build"
+  },
+  "dependencies": {
+    "@agentkit-eval/core": "workspace:*"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
