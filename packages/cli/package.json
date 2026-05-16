@@ -1,0 +1,23 @@
+{
+  "name": "@agentkit-eval/cli",
+  "version": "0.0.1",
+  "description": "CLI for agentkit-eval. Run agent evals from the terminal.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agentkit-eval": "./dist/bin.js"
+  },
+  "files": ["dist", "templates", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --build"
+  },
+  "dependencies": {
+    "@agentkit-eval/core": "workspace:*",
+    "tinyglobby": "^0.2.10",
+    "tsx": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "example-tool-use",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "eval": "agentkit-eval run agent.eval.ts"
+  },
+  "dependencies": {
+    "@agentkit-eval/core": "workspace:*",
+    "@agentkit-eval/scorers": "workspace:*",
+    "@agentkit-eval/cli": "workspace:*"
+  }
+}
