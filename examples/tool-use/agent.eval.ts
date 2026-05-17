@@ -49,18 +49,24 @@ function read(id: string): string {
 async function ragAgent(query: string) {
   const t0 = Date.now();
   const trace: TraceStep[] = [];
+  const variant = process.env.AGENTKIT_VARIANT ?? 'default';
 
   trace.push({ type: 'tool_call', name: 'search', args: { query } });
   const hits = search(query);
   trace.push({ type: 'tool_result', name: 'search', result: hits });
 
+  // The "lazy" variant skips the read tool on single-hit results to model a
+  // model that takes shortcuts. Useful for demonstrating compare matrices.
+  const lazy = variant === 'lazy';
   const top = hits[0];
   let answer = "I don't know.";
-  if (top) {
+  if (top && !(lazy && hits.length === 1)) {
     trace.push({ type: 'tool_call', name: 'read', args: { id: top } });
     const body = read(top);
     trace.push({ type: 'tool_result', name: 'read', result: body });
     answer = body;
+  } else if (top) {
+    answer = `see: ${top}`;
   }
   trace.push({ type: 'text', result: answer });
 
