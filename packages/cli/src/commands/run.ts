@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import {
   type EvalDefinition,
   type EvalRunFile,
@@ -12,12 +11,15 @@ import {
   writeRunFile,
 } from '@agentkit-eval/core';
 import { glob } from 'tinyglobby';
+import { loadEvalsFromFile } from '../load.js';
+import { startWatch } from '../watch.js';
 
 interface ParsedArgs {
   patterns: string[];
   outDir: string;
   reportPath?: string;
   bail: boolean;
+  watch: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -25,6 +27,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     patterns: [],
     outDir: '.agentkit-eval',
     bail: false,
+    watch: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -38,6 +41,8 @@ function parseArgs(argv: string[]): ParsedArgs {
       args.reportPath = next;
     } else if (a === '--bail') {
       args.bail = true;
+    } else if (a === '--watch' || a === '-w') {
+      args.watch = true;
     } else if (a && !a.startsWith('--')) {
       args.patterns.push(a);
     }
@@ -46,70 +51,70 @@ function parseArgs(argv: string[]): ParsedArgs {
   return args;
 }
 
-function isEvalDefinition(value: unknown): value is EvalDefinition<unknown, unknown, unknown> {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.name === 'string' &&
-    typeof v.agent === 'function' &&
-    Array.isArray(v.scorers) &&
-    'cases' in v
-  );
+async function discoverFiles(patterns: string[], cwd: string): Promise<string[]> {
+  return glob(patterns, {
+    cwd,
+    ignore: ['**/node_modules/**', '**/dist/**', '**/.agentkit-eval/**'],
+    absolute: true,
+  });
 }
 
-async function loadEvalsFromFile(
+interface RunFileOptions {
+  outDir: string;
+  bail: boolean;
+}
+
+async function runFile(
   file: string,
-): Promise<EvalDefinition<unknown, unknown, unknown>[]> {
-  await import('tsx/esm/api').then(({ register }) => register());
-  const mod = (await import(pathToFileURL(file).href)) as Record<string, unknown>;
-  const found: EvalDefinition<unknown, unknown, unknown>[] = [];
-  for (const value of Object.values(mod)) {
-    if (isEvalDefinition(value)) found.push(value);
+  options: RunFileOptions,
+): Promise<{ runs: EvalRunFile[]; failed: number; bailed: boolean }> {
+  const defs = await loadEvalsFromFile(file);
+  const runs: EvalRunFile[] = [];
+  let failed = 0;
+  for (const def of defs) {
+    printHeader(def.name);
+    const run = await runEval(def as EvalDefinition<unknown, unknown, unknown>, {
+      onCase: (c) => printCase(c),
+    });
+    printSummary(run);
+    const path = await writeRunFile(run, options.outDir);
+    process.stdout.write(`  → ${path}\n`);
+    runs.push(run);
+    failed += run.summary.fail;
+    if (options.bail && run.summary.fail > 0) {
+      return { runs, failed, bailed: true };
+    }
   }
-  return found;
+  return { runs, failed, bailed: false };
 }
 
 export async function runCommand(argv: string[]): Promise<number> {
   const args = parseArgs(argv);
   const cwd = process.cwd();
-  const files = await glob(args.patterns, {
-    cwd,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/.agentkit-eval/**'],
-    absolute: true,
-  });
+  const outDir = resolve(cwd, args.outDir);
+  const files = await discoverFiles(args.patterns, cwd);
 
   if (files.length === 0) {
     process.stderr.write(`no eval files matched: ${args.patterns.join(', ')}\n`);
     return 1;
   }
 
+  if (args.watch) {
+    await startWatch({
+      files,
+      cwd,
+      run: (file) => runFile(file, { outDir, bail: args.bail }).then(() => undefined),
+    });
+    return 0;
+  }
+
   let totalFail = 0;
   const allRuns: EvalRunFile[] = [];
-
   for (const file of files) {
-    const defs = await loadEvalsFromFile(file);
-    if (defs.length === 0) continue;
-
-    for (const def of defs) {
-      printHeader(def.name);
-      const run = await runEval(def, {
-        onCase: (c) => {
-          printCase(c);
-          if (args.bail && !c.passed) {
-            process.stdout.write('\n--bail set, stopping\n');
-          }
-        },
-      });
-      printSummary(run);
-      const path = await writeRunFile(run, resolve(cwd, args.outDir));
-      process.stdout.write(`  → ${path}\n`);
-      totalFail += run.summary.fail;
-      allRuns.push(run);
-
-      if (args.bail && run.summary.fail > 0) {
-        return 1;
-      }
-    }
+    const { runs, failed, bailed } = await runFile(file, { outDir, bail: args.bail });
+    totalFail += failed;
+    allRuns.push(...runs);
+    if (bailed) return 1;
   }
 
   if (args.reportPath) {
