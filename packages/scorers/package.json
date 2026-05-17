@@ -22,6 +22,11 @@
       "types": "./dist/output.d.ts",
       "import": "./dist/output.js",
       "require": "./dist/output.cjs"
+    },
+    "./snapshot": {
+      "types": "./dist/snapshot.d.ts",
+      "import": "./dist/snapshot.js",
+      "require": "./dist/snapshot.cjs"
     }
   },
   "files": ["dist", "README.md"],
