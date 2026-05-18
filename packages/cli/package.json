@@ -7,9 +7,13 @@
   "bin": {
     "agentkit-eval": "./dist/bin.js"
   },
-  "files": ["dist", "templates", "README.md"],
+  "files": [
+    "dist",
+    "templates",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsup",
+    "build": "node init && tsup",
     "typecheck": "tsc --build"
   },
   "dependencies": {

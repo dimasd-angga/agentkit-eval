@@ -29,9 +29,12 @@
       "require": "./dist/snapshot.cjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsup",
+    "build": "node init && tsup",
     "typecheck": "tsc --build"
   },
   "dependencies": {
