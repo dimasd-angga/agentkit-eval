@@ -90,14 +90,33 @@ Every run writes a JSON file to `.agentkit-eval/<eval-name>/<run-id>.json`. Comm
 
 ## CI
 
+Drop the action into a workflow and PRs get a sticky comment with score deltas vs. the base branch:
+
 ```yaml
-- run: pnpm install
-- run: pnpm agentkit-eval run --report REPORT.md
-- if: failure()
-  run: cat REPORT.md
+# .github/workflows/eval.yml
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - uses: dimasd-angga/agentkit-eval/packages/action@main
 ```
 
-Non-zero exit on any failing case. A GitHub Action that diffs the report against the base branch is shipping next.
+Under the hood it runs `agentkit-eval run` on both refs and `agentkit-eval diff` on the two output directories. You can do the same locally:
+
+```
+agentkit-eval diff .agentkit-eval-base .agentkit-eval-head
+```
 
 ## Status
 

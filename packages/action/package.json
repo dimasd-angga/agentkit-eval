@@ -1,0 +1,7 @@
+{
+  "name": "@agentkit-eval/action",
+  "version": "0.0.1",
+  "private": true,
+  "description": "GitHub Action manifest for agentkit-eval. Not published to npm; consumed via uses: dimasd-angga/agentkit-eval/packages/action@<sha>.",
+  "license": "MIT"
+}

@@ -1,0 +1,148 @@
+name: agentkit-eval
+description: Run agentkit-eval and post a sticky PR comment with the score diff vs the base branch.
+author: Dimas D. Angga
+branding:
+  icon: target
+  color: blue
+
+inputs:
+  eval-glob:
+    description: Glob passed to `agentkit-eval run`. Defaults to `**/*.eval.ts`.
+    required: false
+    default: ''
+  base-ref:
+    description: |
+      Git ref to compare against. Defaults to the PR base when available,
+      otherwise `origin/main`.
+    required: false
+    default: ''
+  working-directory:
+    description: Working directory to run evals from.
+    required: false
+    default: .
+  install-command:
+    description: Command that installs dependencies in `working-directory`.
+    required: false
+    default: pnpm install --frozen-lockfile
+  run-command:
+    description: |
+      Command that runs evals and writes JSON output. Should write to the
+      `AGENTKIT_OUT` env var so the action knows where to look.
+    required: false
+    default: pnpm exec agentkit-eval run --out "$AGENTKIT_OUT"
+  comment:
+    description: Whether to post a sticky PR comment. Set to `false` to only emit the markdown artifact.
+    required: false
+    default: 'true'
+  github-token:
+    description: Token used to post the sticky PR comment.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  report:
+    description: Path to the rendered markdown report.
+    value: ${{ steps.diff.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve base ref
+      id: base
+      shell: bash
+      run: |
+        ref="${{ inputs.base-ref }}"
+        if [ -z "$ref" ]; then
+          if [ -n "${{ github.base_ref }}" ]; then
+            ref="origin/${{ github.base_ref }}"
+          else
+            ref="origin/main"
+          fi
+        fi
+        echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+    - name: Install (head)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ inputs.install-command }}
+
+    - name: Run evals (head)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AGENTKIT_OUT: ${{ github.workspace }}/.agentkit-eval-head
+      run: ${{ inputs.run-command }}
+      continue-on-error: true
+
+    - name: Checkout base ref into a worktree
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        git fetch --no-tags --depth=1 origin "${{ steps.base.outputs.ref }}#" || true
+        git fetch --no-tags --depth=1 origin "${{ github.base_ref }}" || true
+        rm -rf "${{ github.workspace }}/.agentkit-base-tree"
+        git worktree add --detach "${{ github.workspace }}/.agentkit-base-tree" "${{ steps.base.outputs.ref }}" || \
+          git worktree add --detach "${{ github.workspace }}/.agentkit-base-tree" "${{ github.base_ref }}" || \
+          echo "no base ref available"
+
+    - name: Install (base)
+      if: hashFiles(format('{0}/.agentkit-base-tree/package.json', github.workspace)) != ''
+      shell: bash
+      working-directory: ${{ github.workspace }}/.agentkit-base-tree
+      run: ${{ inputs.install-command }}
+      continue-on-error: true
+
+    - name: Run evals (base)
+      if: hashFiles(format('{0}/.agentkit-base-tree/package.json', github.workspace)) != ''
+      shell: bash
+      working-directory: ${{ github.workspace }}/.agentkit-base-tree
+      env:
+        AGENTKIT_OUT: ${{ github.workspace }}/.agentkit-eval-base
+      run: ${{ inputs.run-command }}
+      continue-on-error: true
+
+    - name: Render diff
+      id: diff
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        report="${{ github.workspace }}/agentkit-eval-report.md"
+        pnpm exec agentkit-eval diff \
+          "${{ github.workspace }}/.agentkit-eval-base" \
+          "${{ github.workspace }}/.agentkit-eval-head" \
+          --out "$report"
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+
+    - name: Upload report artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: agentkit-eval-report
+        path: ${{ steps.diff.outputs.report }}
+      if: always()
+
+    - name: Post sticky PR comment
+      if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      uses: actions/github-script@v7
+      env:
+        REPORT_PATH: ${{ steps.diff.outputs.report }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- agentkit-eval:diff -->';
+          const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({
+            owner, repo, issue_number, per_page: 100,
+          });
+          const existing = comments.find((c) => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner, repo, comment_id: existing.id, body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner, repo, issue_number, body,
+            });
+          }
