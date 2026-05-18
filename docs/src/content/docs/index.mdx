@@ -1,0 +1,32 @@
+---
+title: agentkit-eval
+description: Type-safe evals for AI agents. Score traces, not just outputs.
+template: splash
+hero:
+  tagline: Type-safe evals for AI agents. Score traces, not just outputs. Run locally. Results commit to git.
+  actions:
+    - text: Quickstart
+      link: /quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: GitHub
+      link: https://github.com/dimasd-angga/agentkit-eval
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="Trace-aware scorers" icon="puzzle">
+    `toolsCalled`, `toolOrder`, `noTool`, `stepCountUnder` — score what your agent *did*, not just what it said.
+  </Card>
+  <Card title="Type inference end-to-end" icon="seti:typescript">
+    `defineEval` carries your input/output/trace types into every scorer. No casts.
+  </Card>
+  <Card title="Results in git" icon="document">
+    Every run writes JSON to `.agentkit-eval/`. Diff scores in PRs like you diff tests.
+  </Card>
+  <Card title="Sticky PR comments" icon="comment">
+    Drop the GitHub Action in. Every PR gets a per-scorer delta against the base branch.
+  </Card>
+</CardGrid>
